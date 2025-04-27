@@ -17,6 +17,7 @@ def load_model():
 
 # Load the pre-trained model (you can replace this with your fine-tuned model later)
 model = load_model()
+# model = SentenceTransformer('fine_tuned_model')
 
 # --- Malicious references ---
 malicious_reference = [
