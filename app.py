@@ -1,6 +1,7 @@
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
 import openai
+import torch
 
 # --- Streamlit page settings ---
 st.set_page_config(
@@ -9,11 +10,12 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- Load the transformer model once ---
+# --- Load the pre-trained model once ---
 @st.cache_resource
 def load_model():
     return SentenceTransformer('sentence-transformers/gtr-t5-large')
 
+# Load the pre-trained model (you can replace this with your fine-tuned model later)
 model = load_model()
 
 # --- Malicious references ---
