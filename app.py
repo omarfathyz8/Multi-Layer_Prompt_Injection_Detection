@@ -48,7 +48,7 @@ def heuristic_check(prompt):
             return True
     return False
 
-def bert_check(prompt, threshold=0.6):
+def bert_check(prompt, threshold=0.5):
     prompt_emb = model.encode(prompt, convert_to_tensor=True)
     similarity = util.cos_sim(prompt_emb, malicious_embs)
     max_sim = similarity.max().item()
