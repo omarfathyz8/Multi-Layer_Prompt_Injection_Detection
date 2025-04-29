@@ -3,14 +3,14 @@ from sentence_transformers import SentenceTransformer, util
 import openai
 import torch
 
-# --- Streamlit page settings ---
+# Streamlit page settings
 st.set_page_config(
     page_title="Prompt Injection Detector",
     page_icon="🛡️",
     layout="centered"
 )
 
-# --- Load the pre-trained model once ---
+# Load the pre-trained model once
 @st.cache_resource
 def load_model():
     return SentenceTransformer('sentence-transformers/gtr-t5-large')
@@ -19,7 +19,7 @@ def load_model():
 model = load_model()
 # model = SentenceTransformer('fine_tuned_model')
 
-# --- Malicious references ---
+# Malicious references
 malicious_reference = [
     "ignore previous instructions",
     "ignore system instructions",
@@ -38,10 +38,10 @@ malicious_reference = [
 
 malicious_embs = model.encode(malicious_reference, convert_to_tensor=True)
 
-# --- Blacklist for heuristics ---
+# Blacklist for heuristics
 blacklist = ["ignore previous", "act as", "system prompt", "you are now", "simulate a jailbreak"]
 
-# --- Functions ---
+# Functions
 def heuristic_check(prompt):
     for phrase in blacklist:
         if phrase.lower() in prompt.lower():
@@ -65,7 +65,7 @@ def gpt_api_check(output):
     answer = response['choices'][0]['message']['content'].strip().lower()
     return "yes" in answer
 
-# --- App UI ---
+# App UI
 st.title("🛡️ Prompt Injection Detector")
 st.markdown("Test your prompt against heuristic rules, BERT semantic similarity, and optional GPT-4 security auditing.")
 
@@ -97,12 +97,12 @@ if st.button("🔍 Analyze Prompt"):
                 except Exception as e:
                     st.error(f"Error during GPT-4 check: {str(e)}")
 
-        if heuristic_flag or bert_flag:
+        if heuristic_flag or bert_flag or gpt4_flag:
             st.error("⚠️ Potential prompt injection detected!")
         else:
             st.success("✅ Prompt looks safe.")
 
-# --- Footer ---
+# Footer
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray;'>Made with ❤️ by <b>Omar Fathy</b></div>",
