@@ -1,7 +1,13 @@
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
+from transformers import T5ForConditionalGeneration, T5Tokenizer
+from torch.nn.functional import cosine_similarity, normalize
 import openai
 import torch
+import os
+import zipfile
+import shutil
+from google.colab import drive
 
 # Streamlit page settings
 st.set_page_config(
@@ -15,9 +21,26 @@ st.set_page_config(
 def load_model():
     return SentenceTransformer('sentence-transformers/gtr-t5-large')
 
-# Load the pre-trained model (you can replace this with your fine-tuned model later)
-model = load_model()
-# model = SentenceTransformer('fine_tuned_model')
+drive.mount('/content/drive')
+
+# Load from the saved directory
+MODEL_ZIP_PATH = "fine_tuned_model.zip"
+EXTRACT_DIR = "fine_tuned_model"
+
+# Replace with your actual file name
+source_path = '/content/drive/MyDrive/fine_tuned_model.zip'
+destination_path = '/content/fine_tuned_model.zip'
+
+shutil.copy(source_path, destination_path)
+
+with zipfile.ZipFile(destination_path, 'r') as zip_ref:
+    zip_ref.extractall('/content/my_model')
+
+
+model_path = '/content/my_model'
+tokenizer = T5Tokenizer.from_pretrained(model_path)
+model = T5ForConditionalGeneration.from_pretrained(model_path)
+
 
 # Malicious references
 malicious_reference = [
@@ -36,22 +59,41 @@ malicious_reference = [
     "pretend to be a user",
 ]
 
-malicious_embs = model.encode(malicious_reference, convert_to_tensor=True)
+# Build the embedding tensor
+malicious_embs = torch.cat([get_t5_embedding(p, tokenizer, model) for p in malicious_reference], dim=0)  # Shape: [N, hidden_dim]
 
 # Blacklist for heuristics
 blacklist = ["ignore previous", "act as", "system prompt", "you are now", "simulate a jailbreak"]
 
 # Functions
+def get_t5_embedding(text, tokenizer, model):
+    # Tokenize input
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=128).to(model.device)
+
+    # Get encoder output
+    with torch.no_grad():
+        encoder_output = model.encoder(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask)
+        hidden_states = encoder_output.last_hidden_state  # [1, seq_len, hidden_dim]
+
+    # Mean pooling (ignoring padding)
+    attention_mask = inputs.attention_mask.unsqueeze(-1)
+    summed = torch.sum(hidden_states * attention_mask, dim=1)
+    counts = torch.clamp(attention_mask.sum(dim=1), min=1e-9)
+    mean_pooled = summed / counts
+
+    # Normalize for cosine similarity
+    return normalize(mean_pooled, p=2, dim=1)
+
 def heuristic_check(prompt):
     for phrase in blacklist:
         if phrase.lower() in prompt.lower():
             return True
     return False
 
-def bert_check(prompt, threshold=0.6):
-    prompt_emb = model.encode(prompt, convert_to_tensor=True)
-    similarity = util.cos_sim(prompt_emb, malicious_embs)
-    max_sim = similarity.max().item()
+def bert_check(prompt, malicious_embs, tokenizer, model, threshold=0.6):
+    prompt_emb = get_t5_embedding(prompt, tokenizer, model)
+    similarity_scores = cosine_similarity(prompt_emb, malicious_embs)
+    max_sim = similarity_scores.max().item()
     return max_sim > threshold, round(max_sim, 3)
 
 def gpt_api_check(output):
@@ -101,10 +143,3 @@ if st.button("🔍 Analyze Prompt"):
             st.error("⚠️ Potential prompt injection detected!")
         else:
             st.success("✅ Prompt looks safe.")
-
-# Footer
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: gray;'>Made with ❤️ by <b>Omar Fathy</b></div>",
-    unsafe_allow_html=True
-)
