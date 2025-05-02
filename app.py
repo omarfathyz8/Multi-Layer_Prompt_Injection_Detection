@@ -4,10 +4,6 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 from torch.nn.functional import cosine_similarity, normalize
 import openai
 import torch
-import os
-import zipfile
-import shutil
-from google.colab import drive
 
 # Streamlit page settings
 st.set_page_config(
@@ -21,26 +17,12 @@ st.set_page_config(
 def load_model():
     return SentenceTransformer('sentence-transformers/gtr-t5-large')
 
-drive.mount('/content/drive')
+model_path = "fine_tuned_model"
 
-# Load from the saved directory
-MODEL_ZIP_PATH = "fine_tuned_model.zip"
-EXTRACT_DIR = "fine_tuned_model"
-
-# Replace with your actual file name
-source_path = '/content/drive/MyDrive/fine_tuned_model.zip'
-destination_path = '/content/fine_tuned_model.zip'
-
-shutil.copy(source_path, destination_path)
-
-with zipfile.ZipFile(destination_path, 'r') as zip_ref:
-    zip_ref.extractall('/content/my_model')
-
-
-model_path = '/content/my_model'
+# Load model and tokenizer from local folder in the repo
 tokenizer = T5Tokenizer.from_pretrained(model_path)
 model = T5ForConditionalGeneration.from_pretrained(model_path)
-
+model = model.to("cuda" if torch.cuda.is_available() else "cpu")
 
 # Malicious references
 malicious_reference = [
