@@ -1,7 +1,5 @@
 import streamlit as st
 from sentence_transformers import SentenceTransformer, util
-from transformers import T5ForConditionalGeneration, T5Tokenizer
-from torch.nn.functional import cosine_similarity, normalize
 import openai
 import torch
 
@@ -17,12 +15,9 @@ st.set_page_config(
 def load_model():
     return SentenceTransformer('sentence-transformers/gtr-t5-large')
 
-model_path = "fine_tuned_model"
-
-# Load model and tokenizer from local folder in the repo
-tokenizer = T5Tokenizer.from_pretrained(model_path)
-model = T5ForConditionalGeneration.from_pretrained(model_path)
-model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+# Load the pre-trained model (you can replace this with your fine-tuned model later)
+model = load_model()
+# model = SentenceTransformer('fine_tuned_model')
 
 # Malicious references
 malicious_reference = [
@@ -41,41 +36,22 @@ malicious_reference = [
     "pretend to be a user",
 ]
 
-# Build the embedding tensor
-malicious_embs = torch.cat([get_t5_embedding(p, tokenizer, model) for p in malicious_reference], dim=0)  # Shape: [N, hidden_dim]
+malicious_embs = model.encode(malicious_reference, convert_to_tensor=True)
 
 # Blacklist for heuristics
 blacklist = ["ignore previous", "act as", "system prompt", "you are now", "simulate a jailbreak"]
 
 # Functions
-def get_t5_embedding(text, tokenizer, model):
-    # Tokenize input
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=128).to(model.device)
-
-    # Get encoder output
-    with torch.no_grad():
-        encoder_output = model.encoder(input_ids=inputs.input_ids, attention_mask=inputs.attention_mask)
-        hidden_states = encoder_output.last_hidden_state  # [1, seq_len, hidden_dim]
-
-    # Mean pooling (ignoring padding)
-    attention_mask = inputs.attention_mask.unsqueeze(-1)
-    summed = torch.sum(hidden_states * attention_mask, dim=1)
-    counts = torch.clamp(attention_mask.sum(dim=1), min=1e-9)
-    mean_pooled = summed / counts
-
-    # Normalize for cosine similarity
-    return normalize(mean_pooled, p=2, dim=1)
-
 def heuristic_check(prompt):
     for phrase in blacklist:
         if phrase.lower() in prompt.lower():
             return True
     return False
 
-def bert_check(prompt, malicious_embs, tokenizer, model, threshold=0.6):
-    prompt_emb = get_t5_embedding(prompt, tokenizer, model)
-    similarity_scores = cosine_similarity(prompt_emb, malicious_embs)
-    max_sim = similarity_scores.max().item()
+def bert_check(prompt, threshold=0.6):
+    prompt_emb = model.encode(prompt, convert_to_tensor=True)
+    similarity = util.cos_sim(prompt_emb, malicious_embs)
+    max_sim = similarity.max().item()
     return max_sim > threshold, round(max_sim, 3)
 
 def gpt_api_check(output):
